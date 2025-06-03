@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Nhận diện lỗi nhập kho</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #e3f0ff 0%, #f8fafc 100%);
+            color: #1a237e;
+            margin: 0;
+            padding: 0;
+        }
+        h2, h3 {
+            color: #1976d2;
+            text-align: center;
+            margin-top: 24px;
+            font-size: 2.2rem;
+            letter-spacing: 1px;
+        }
+        .container {
+            max-width: 700px;
+            margin: 36px auto;
+            background: #fff;
+            border-radius: 18px;
+            box-shadow: 0 4px 24px rgba(25, 118, 210, 0.10);
+            padding: 40px 32px 32px 32px;
+        }
+        label, button, input, .fault-item, #fault-result, #account {
+            font-size: 1.25rem;
+        }
+        .section {
+            margin-bottom: 32px;
+        }
+        #connect-btn, #file-input, #camera-btn, #take-photo-btn {
+            margin: 10px 8px 10px 0;
+        }
+        #connect-btn, #camera-btn, #take-photo-btn {
+            background: linear-gradient(90deg, #1976d2 60%, #64b5f6 100%);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 22px;
+            cursor: pointer;
+            font-size: 1.15rem;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        #connect-btn:disabled, #camera-btn:disabled, #take-photo-btn:disabled {
+            background: #b3e5fc;
+            color: #fff;
+            cursor: not-allowed;
+        }
+        #account {
+            margin: 10px 0 18px 0;
+            color: #1976d2;
+            font-weight: 600;
+            font-size: 1.15rem;
+        }
+        .preview-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+            margin-top: 18px;
+            justify-content: center;
+        }
+        .img-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        .img-wrapper img {
+            max-width: 260px;
+            border-radius: 10px;
+            border: 2px solid #90caf9;
+            box-shadow: 0 2px 12px rgba(25,118,210,0.08);
+        }
+        .bounding-box {
+            position: absolute;
+            border: 2.5px solid #e53935;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .result-text {
+            text-align: center;
+            margin-top: 8px;
+            font-size: 1.15rem;
+            min-height: 1.5em;
+        }
+        .result-text.ok {
+            color: #388e3c;
+            font-weight: bold;
+        }
+        .result-text.err {
+            color: #e53935;
+            font-weight: bold;
+        }
+        #video {
+            display: none;
+            margin: 0 auto 12px auto;
+            border-radius: 10px;
+            border: 2px solid #90caf9;
+        }
+        #canvas {
+            display: none;
+        }
+        .fault-history-list {
+            list-style: none;
+            padding: 0;
+        }
+        .fault-item {
+            margin-bottom: 18px;
+            padding: 18px;
+            border: 2px solid #90caf9;
+            border-radius: 10px;
+            background: #e3f2fd;
+        }
+        .fault-item img {
+            max-width: 180px;
+            border-radius: 8px;
+            border: 2px solid #90caf9;
+            margin-top: 8px;
+            display: block;
+        }
+        .no-fault {
+            color: #388e3c;
+            font-weight: bold;
+            font-size: 1.2rem;
+            text-align: center;
+        }
+        #loading {
+            color: #1976d2;
+            font-size: 1.1rem;
+            text-align: center;
+        }
+        @media (max-width: 800px) {
+            .container { padding: 18px 4px; }
+            h2, h3 { font-size: 1.3rem; }
+            .img-wrapper img { max-width: 98vw; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Nhận diện lỗi nhập kho</h2>
+        <div class="section">
+            <button id="connect-btn">Kết nối Metamask</button>
+            <span id="account"></span>
+        </div>
+        <div class="section">
+            <label for="file-input"><b>Chọn ảnh sản phẩm:</b></label>
+            <input type="file" accept="image/*" id="file-input" multiple>
+            <div class="preview-area" id="preview-area"></div>
+        </div>
+        <div class="section">
+            <button id="camera-btn">Bật camera</button>
+            <video id="video" width="320" height="240" autoplay></video>
+            <button id="take-photo-btn" type="button" disabled>Chụp ảnh</button>
+            <canvas id="canvas" width="320" height="240"></canvas>
+            <div class="preview-area" id="camera-preview-area"></div>
+        </div>
+        <hr>
+        <h3>Lịch sử lỗi nhập kho</h3>
+        <div id="loading">Đang tải dữ liệu...</div>
+        <ul class="fault-history-list" id="fault-list"></ul>
+        <div id="no-fault" class="no-fault" style="display:none;">Không có lỗi nào được ghi nhận.</div>
+    </div>
+    <script>
+        let supplierAddress = "";
+        let stream;
+
+        // Kết nối Metamask
+        document.getElementById("connect-btn").onclick = async function() {
+            if (window.ethereum) {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    supplierAddress = accounts[0];
+                    document.getElementById("account").innerHTML = `Đã kết nối address supplier: <b>${supplierAddress}</b>`;
+                    loadFaults();
+                } catch (err) {
+                    alert("Kết nối Metamask thất bại!");
+                }
+            } else {
+                alert("Vui lòng cài đặt Metamask!");
+            }
+        };
+
+        // Chọn nhiều file ảnh và preview
+        document.getElementById("file-input").onchange = function(e) {
+            const files = Array.from(e.target.files);
+            const previewArea = document.getElementById("preview-area");
+            if (files.length > 0) {
+                files.forEach((file, idx) => {
+                    const url = URL.createObjectURL(file);
+                    const uniqueId = Date.now() + '-' + idx;
+                    const wrapper = document.createElement("div");
+                    wrapper.className = "img-wrapper";
+                    wrapper.innerHTML = `
+                        <img src="${url}" id="preview-file-${uniqueId}">
+                        <div class="result-text" id="result-file-${uniqueId}"></div>
+                    `;
+                    previewArea.appendChild(wrapper);
+                    detectSingleFile(file, uniqueId);
+                });
+            }
+        };
+
+        // Detect từng file với id duy nhất
+        function detectSingleFile(file, uniqueId) {
+            const resultDiv = document.getElementById(`result-file-${uniqueId}`);
+            resultDiv.innerText = "Đang nhận diện...";
+            const formData = new FormData();
+            formData.append("image", file);
+            formData.append("supplier_address", supplierAddress);
+            fetch("http://localhost:5000/detect_and_report", {
+                method: "POST",
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                showDetectionResult(data, `preview-file-${uniqueId}`, `result-file-${uniqueId}`);
+                loadFaults();
+            });
+        }
+
+        // Bật camera
+        document.getElementById("camera-btn").onclick = async function() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const video = document.getElementById("video");
+                video.srcObject = stream;
+                video.style.display = "block";
+                document.getElementById("take-photo-btn").disabled = false;
+            } catch (err) {
+                alert("Không thể truy cập camera. Vui lòng kiểm tra quyền truy cập!");
+            }
+        };
+
+        // Chụp ảnh từ camera
+        document.getElementById("take-photo-btn").onclick = function() {
+            const video = document.getElementById("video");
+            const canvas = document.getElementById("canvas");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL("image/jpeg");
+            const uniqueId = Date.now();
+            const previewArea = document.getElementById("camera-preview-area");
+            const wrapper = document.createElement("div");
+            wrapper.className = "img-wrapper";
+            wrapper.innerHTML = `
+                <img src="${dataUrl}" id="camera-capture-${uniqueId}">
+                <div class="result-text" id="camera-result-${uniqueId}"></div>
+            `;
+            previewArea.appendChild(wrapper);
+
+            // Gửi ảnh về backend để detect
+            fetch(dataUrl)
+                .then(res => res.blob())
+                .then(blob => {
+                    const file = new File([blob], "captured.jpg", { type: "image/jpeg" });
+                    const formData = new FormData();
+                    formData.append("image", file);
+                    formData.append("supplier_address", supplierAddress);
+                    document.getElementById(`camera-result-${uniqueId}`).innerText = "Đang nhận diện...";
+                    fetch("http://localhost:5000/detect_and_report", {
+                        method: "POST",
+                        body: formData
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        // Nếu backend trả về ảnh có bounding box, cập nhật lại src
+                        if (data.image_url) {
+                            document.getElementById(`camera-capture-${uniqueId}`).src = data.image_url;
+                        }
+                        // Hiển thị kết quả
+                        const resultDiv = document.getElementById(`camera-result-${uniqueId}`);
+                        if (data.errors && data.errors.length > 0) {
+                            resultDiv.className = "result-text err";
+                            resultDiv.innerHTML = `<b>Phát hiện ${data.errors.length} lỗi:</b> ${data.errors.join(", ")}`;
+                            // Nếu có boxes, vẽ bounding box
+                            if (data.boxes && Array.isArray(data.boxes)) {
+                                drawBoundingBoxes(data.boxes, document.getElementById(`camera-capture-${uniqueId}`));
+                            }
+                        } else {
+                            resultDiv.className = "result-text ok";
+                            resultDiv.innerHTML = `<b>Không phát hiện ra lỗi.</b>`;
+                        }
+                        loadFaults();
+                        // Tắt camera sau khi chụp
+                        if (stream) {
+                            stream.getTracks().forEach(track => track.stop());
+                            document.getElementById("video").style.display = "none";
+                            document.getElementById("take-photo-btn").disabled = true;
+                        }
+                    })
+                    .catch(() => {
+                        document.getElementById(`camera-result-${uniqueId}`).innerHTML =
+                            `<span style="color:red;">Không thể nhận diện ảnh!</span>`;
+                    });
+                });
+        };
+
+        // Hiển thị kết quả detect (ảnh, bounding box, lỗi)
+        function showDetectionResult(data, imgId, resultId) {
+            const img = document.getElementById(imgId);
+            const wrapper = img.parentElement;
+            clearBoundingBoxes(wrapper);
+            if (data.errors && data.errors.length > 0) {
+                // Nếu backend trả về ảnh có bounding box, thay ảnh
+                if (data.image_url) {
+                    img.src = data.image_url;
+                }
+                document.getElementById(resultId).className = "result-text err";
+                document.getElementById(resultId).innerHTML =
+                    `<b>Phát hiện ${data.errors.length} lỗi:</b> ${data.errors.join(", ")}`;
+                // Nếu backend trả về boxes, vẽ bounding box
+                if (data.boxes && Array.isArray(data.boxes)) {
+                    drawBoundingBoxes(data.boxes, img);
+                }
+            } else {
+                document.getElementById(resultId).className = "result-text ok";
+                document.getElementById(resultId).innerHTML =
+                    `<b>Không phát hiện ra lỗi.</b>`;
+            }
+        }
+
+        // Vẽ bounding box lên ảnh preview
+        function drawBoundingBoxes(boxes, img) {
+            const wrapper = img.parentElement;
+            boxes.forEach(box => {
+                const div = document.createElement("div");
+                div.className = "bounding-box";
+                const scaleX = img.width / img.naturalWidth;
+                const scaleY = img.height / img.naturalHeight;
+                div.style.left = (box[0] * scaleX) + "px";
+                div.style.top = (box[1] * scaleY) + "px";
+                div.style.width = (box[2] * scaleX) + "px";
+                div.style.height = (box[3] * scaleY) + "px";
+                div.style.position = "absolute";
+                wrapper.appendChild(div);
+            });
+        }
+
+        function clearBoundingBoxes(wrapper) {
+            Array.from(wrapper.querySelectorAll('.bounding-box')).forEach(e => e.remove());
+        }
+
+        // Hiển thị lịch sử lỗi
+        function loadFaults() {
+            document.getElementById("loading").style.display = "block";
+            document.getElementById("fault-list").innerHTML = "";
+            document.getElementById("no-fault").style.display = "none";
+            if (!supplierAddress) return;
+            fetch(`/faults?supplier=${supplierAddress}`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById("loading").style.display = "none";
+                    const ul = document.getElementById("fault-list");
+                    if (data.length === 0) {
+                        document.getElementById("no-fault").style.display = "block";
+                    } else {
+                        data.forEach((fault, idx) => {
+                            const li = document.createElement("li");
+                            li.className = "fault-item";
+                            let imgTag = "";
+                            if (fault.image_url) {
+                                imgTag = `<img src="${fault.image_url}">`;
+                            }
+                            li.innerHTML = `
+                                <b>STT:</b> ${idx + 1}<br>
+                                <b>Thời gian:</b> ${new Date(fault.timestamp * 1000).toLocaleString()}<br>
+                                <b>Số lỗi:</b> ${fault.errors.length}<br>
+                                <b>Loại lỗi:</b> ${fault.errors.join(", ")}
+                                ${imgTag}
+                            `;
+                            ul.appendChild(li);
+                        });
+                    }
+                })
+                .catch(() => {
+                    document.getElementById("loading").innerText = "Không thể tải dữ liệu từ server!";
+                });
+        }
+
+        // Reset khi đổi tài khoản
+        window.ethereum && window.ethereum.on('accountsChanged', () => {
+            supplierAddress = "";
+            document.getElementById("account").innerText = "";
+            document.getElementById("fault-list").innerHTML = "";
+            document.getElementById("preview-area").innerHTML = "";
+            document.getElementById("camera-preview-area").innerHTML = "";
+        });
+    </script>
+</body>
+</html>

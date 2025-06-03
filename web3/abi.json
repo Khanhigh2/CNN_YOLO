@@ -1,0 +1,106 @@
+[
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_supplier",
+				"type": "address"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "productType",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "string[]",
+				"name": "detectedErrors",
+				"type": "string[]"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "imageUrl",
+				"type": "string"
+			}
+		],
+		"name": "ProductFaultReported",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "productType",
+				"type": "string"
+			},
+			{
+				"internalType": "string[]",
+				"name": "errors",
+				"type": "string[]"
+			},
+			{
+				"internalType": "string",
+				"name": "imageUrl",
+				"type": "string"
+			}
+		],
+		"name": "reportFault",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "supplier",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_newSupplier",
+				"type": "address"
+			}
+		],
+		"name": "updateSupplier",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+]   
